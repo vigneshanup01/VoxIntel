@@ -1,0 +1,30 @@
+import { apiClient } from "./client";
+
+export function listMeetings() {
+  return apiClient.get("/meetings").then((res) => res.data.meetings);
+}
+
+export function getMeeting(id) {
+  return apiClient.get(`/meetings/${id}`).then((res) => res.data);
+}
+
+export function uploadMeeting({ title, file, onProgress }) {
+  const formData = new FormData();
+  formData.append("title", title);
+  formData.append("file", file);
+
+  return apiClient
+    .post("/meetings", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      },
+    })
+    .then((res) => res.data);
+}
+
+export function deleteMeeting(id) {
+  return apiClient.delete(`/meetings/${id}`);
+}
