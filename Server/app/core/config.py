@@ -1,0 +1,43 @@
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # App
+    environment: str = "development"
+    cors_origins: str = "http://localhost:5173"
+
+    # Database
+    database_url: str = "postgresql+psycopg2://voxintel:voxintel@localhost:5432/voxintel"
+
+    # Auth
+    jwt_secret_key: str = "change-me-in-env"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24
+
+    # Rate limiting (auth endpoints)
+    auth_rate_limit_max_attempts: int = 10
+    auth_rate_limit_window_seconds: int = 60
+
+    # Object storage (MinIO / S3-compatible)
+    storage_endpoint_url: str = "http://localhost:9000"
+    storage_access_key: str = "voxintel"
+    storage_secret_key: str = "voxintel123"
+    storage_bucket: str = "voxintel-meetings"
+    storage_region: str = "us-east-1"
+    storage_secure: bool = False
+
+    # Upload limits
+    max_upload_size_bytes: int = 500 * 1024 * 1024  # 500 MB
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

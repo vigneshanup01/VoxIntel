@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: voxintel
+      POSTGRES_PASSWORD: voxintel
+      POSTGRES_DB: voxintel
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voxintel"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: voxintel
+      MINIO_ROOT_PASSWORD: voxintel123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  api:
+    build:
+      context: ./Server
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      ENVIRONMENT: development
+      CORS_ORIGINS: http://localhost:5173
+      DATABASE_URL: postgresql+psycopg2://voxintel:voxintel@postgres:5432/voxintel
+      JWT_SECRET_KEY: dev-only-secret-change-me
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      AUTH_RATE_LIMIT_MAX_ATTEMPTS: 10
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: 60
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: voxintel
+      STORAGE_SECRET_KEY: voxintel123
+      STORAGE_BUCKET: voxintel-meetings
+      STORAGE_REGION: us-east-1
+      STORAGE_SECURE: "false"
+      MAX_UPLOAD_SIZE_BYTES: 524288000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./Server:/srv
+
+  client:
+    build:
+      context: ./Client
+    environment:
+      VITE_API_URL: http://localhost:8001
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Client:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  minio_data:
