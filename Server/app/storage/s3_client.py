@@ -40,6 +40,9 @@ class S3StorageClient(StorageClient):
         extra_args = {"ContentType": content_type} if content_type else {}
         self._client.upload_fileobj(fileobj, self._bucket, key, ExtraArgs=extra_args)
 
+    def download(self, key: str, destination: BinaryIO) -> None:
+        self._client.download_fileobj(self._bucket, key, destination)
+
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=key)
 

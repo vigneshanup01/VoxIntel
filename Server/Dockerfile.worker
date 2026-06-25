@@ -1,0 +1,23 @@
+FROM python:3.12-slim
+
+WORKDIR /srv
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# ffmpeg is required by Whisper to decode audio/video into the raw samples
+# it transcribes -- missing it is a classic "works in my notebook, not in
+# the container" trap.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-worker.txt ./
+RUN pip install --no-cache-dir -r requirements-worker.txt
+
+COPY . .
+
+RUN chmod +x docker-entrypoint.sh
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["celery", "-A", "app.worker.tasks", "worker", "--loglevel=info", "--pool=solo"]

@@ -5,9 +5,11 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.meeting import Meeting
+from app.models.meeting import Meeting, MeetingStatus
+from app.models.transcript_segment import TranscriptSegment
 from app.storage.base import StorageClient
 from app.storage.validation import SNIFF_BYTES, has_allowed_extension, sniff_media_signature
+from app.worker.celery_app import celery_app
 
 
 def _validate_upload(file: UploadFile) -> None:
@@ -94,3 +96,23 @@ def delete_meeting(db: Session, storage: StorageClient, *, meeting: Meeting) -> 
     storage.delete(meeting.storage_path)
     db.delete(meeting)
     db.commit()
+
+
+def enqueue_transcription(meeting_id: uuid.UUID) -> None:
+    celery_app.send_task("transcribe_meeting", args=[str(meeting_id)])
+
+
+def mark_meeting_failed(db: Session, *, meeting: Meeting, error_message: str) -> None:
+    meeting.status = MeetingStatus.FAILED
+    meeting.processing_error = error_message[:2000]
+    db.commit()
+    db.refresh(meeting)
+
+
+def list_transcript_segments(db: Session, *, meeting_id: uuid.UUID) -> list[TranscriptSegment]:
+    return (
+        db.query(TranscriptSegment)
+        .filter(TranscriptSegment.meeting_id == meeting_id)
+        .order_by(TranscriptSegment.start_time)
+        .all()
+    )

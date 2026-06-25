@@ -28,3 +28,11 @@ export function uploadMeeting({ title, file, onProgress }) {
 export function deleteMeeting(id) {
   return apiClient.delete(`/meetings/${id}`);
 }
+
+export function getMeetingStatus(id) {
+  return apiClient.get(`/meetings/${id}/status`).then((res) => res.data);
+}
+
+export function getTranscript(id) {
+  return apiClient.get(`/meetings/${id}/transcript`).then((res) => res.data.segments);
+}

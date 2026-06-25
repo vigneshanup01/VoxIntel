@@ -27,6 +27,13 @@ services:
     volumes:
       - minio_data:/data
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   api:
     build:
       context: ./Server
@@ -47,15 +54,43 @@ services:
       STORAGE_REGION: us-east-1
       STORAGE_SECURE: "false"
       MAX_UPLOAD_SIZE_BYTES: 524288000
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_started
+      redis:
+        condition: service_started
     ports:
       - "8001:8000"
     volumes:
       - ./Server:/srv
+
+  worker:
+    build:
+      context: ./Server
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+psycopg2://voxintel:voxintel@postgres:5432/voxintel
+      STORAGE_ENDPOINT_URL: http://minio:9000
+      STORAGE_ACCESS_KEY: voxintel
+      STORAGE_SECRET_KEY: voxintel123
+      STORAGE_BUCKET: voxintel-meetings
+      STORAGE_REGION: us-east-1
+      STORAGE_SECURE: "false"
+      REDIS_URL: redis://redis:6379/0
+      WHISPER_MODEL_SIZE: base
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      redis:
+        condition: service_started
+    volumes:
+      - ./Server:/srv
+      - whisper_cache:/root/.cache/whisper
 
   client:
     build:
@@ -73,3 +108,5 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  redis_data:
+  whisper_cache:

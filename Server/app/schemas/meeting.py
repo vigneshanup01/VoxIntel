@@ -12,8 +12,15 @@ class MeetingOut(BaseModel):
     original_filename: str
     duration_seconds: float | None
     status: str
+    language_detected: str | None
+    processing_error: str | None
     uploaded_at: datetime
 
 
 class MeetingListResponse(BaseModel):
     meetings: list[MeetingOut]
+
+
+class MeetingStatusOut(BaseModel):
+    status: str
+    processing_error: str | None

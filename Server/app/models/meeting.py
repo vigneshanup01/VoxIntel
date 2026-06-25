@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -30,6 +30,11 @@ class Meeting(Base):
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default=MeetingStatus.UPLOADED, server_default=MeetingStatus.UPLOADED
     )
+    language_detected: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     owner: Mapped["User"] = relationship(back_populates="meetings")
+    transcript_segments: Mapped[list["TranscriptSegment"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="TranscriptSegment.start_time"
+    )

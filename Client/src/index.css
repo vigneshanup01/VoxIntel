@@ -216,9 +216,64 @@ th {
   color: var(--color-muted);
 }
 
-.future-slot {
-  border: 1px dashed var(--color-border);
+.transcript-section {
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1rem;
+}
+
+.transcript-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   color: var(--color-muted);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.transcript__segment {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.transcript__time {
+  flex-shrink: 0;
+  width: 3rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.transcript__text {
+  line-height: 1.5;
+}
+
+.transcript__speaker {
+  color: var(--color-primary-dark);
 }

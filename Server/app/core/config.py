@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # Upload limits
     max_upload_size_bytes: int = 500 * 1024 * 1024  # 500 MB
 
+    # Background processing (Celery + Redis)
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Speech-to-text (worker-only; harmless for the API process to know about)
+    whisper_model_size: str = "base"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

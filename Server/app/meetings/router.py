@@ -8,7 +8,8 @@ from app.dependencies import get_current_user
 from app.meetings import service
 from app.models.audit_log import AuditAction
 from app.models.user import User
-from app.schemas.meeting import MeetingListResponse, MeetingOut
+from app.schemas.meeting import MeetingListResponse, MeetingOut, MeetingStatusOut
+from app.schemas.transcript import TranscriptResponse, TranscriptSegmentOut
 from app.services.audit import log_action
 from app.storage.base import StorageClient
 from app.storage.s3_client import get_storage_client
@@ -26,6 +27,12 @@ def upload_meeting(
 ) -> MeetingOut:
     meeting = service.create_meeting(db, storage, owner_id=current_user.id, title=title, file=file)
     log_action(db, user_id=current_user.id, action=AuditAction.UPLOAD_MEETING, meeting_id=meeting.id)
+    try:
+        service.enqueue_transcription(meeting.id)
+    except Exception as exc:
+        # The upload itself succeeded -- don't fail the request over a
+        # broker hiccup, surface it as a failed meeting instead.
+        service.mark_meeting_failed(db, meeting=meeting, error_message=f"Could not queue for transcription: {exc}")
     return MeetingOut.model_validate(meeting)
 
 
@@ -61,3 +68,24 @@ def delete_meeting(
     # log entry's meeting_id (and any earlier ones) once it's gone.
     log_action(db, user_id=current_user.id, action=AuditAction.DELETE_MEETING, meeting_id=meeting_id)
     service.delete_meeting(db, storage, meeting=meeting)
+
+
+@router.get("/{meeting_id}/status", response_model=MeetingStatusOut)
+def get_meeting_status(
+    meeting_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MeetingStatusOut:
+    meeting = service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
+    return MeetingStatusOut(status=meeting.status, processing_error=meeting.processing_error)
+
+
+@router.get("/{meeting_id}/transcript", response_model=TranscriptResponse)
+def get_meeting_transcript(
+    meeting_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TranscriptResponse:
+    service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
+    segments = service.list_transcript_segments(db, meeting_id=meeting_id)
+    return TranscriptResponse(segments=[TranscriptSegmentOut.model_validate(s) for s in segments])
