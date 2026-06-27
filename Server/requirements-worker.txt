@@ -1,2 +1,36 @@
 -r requirements.txt
+# torch/torchaudio must (a) match each other exactly and (b) be old enough
+# that torchaudio still has `.info()`/`AudioMetaData`, which pyannote.audio
+# 3.3.2's own code calls directly. Letting pip resolve each independently
+# (e.g. torch 2.12.1 + torchaudio 2.11.0, the latest of each) silently
+# installs a pair where that API no longer exists -- breaks with "module
+# 'torchaudio' has no attribute 'AudioMetaData'" instead of a
+# dependency-resolution error, since both still satisfy the loose version
+# ranges whisper/pyannote declare. Confirmed locally: 2.11.0 lacks it,
+# 2.6.0 (paired with torch==2.6.0) has it.
+torch==2.6.0
+torchaudio==2.6.0
+# pyannote.audio 3.3.2 calls hf_hub_download(..., use_auth_token=...), a
+# kwarg huggingface_hub removed in newer releases (renamed to `token`).
+# Pin to a release that still has it.
+huggingface_hub==0.25.2
+# Imported unconditionally (for plotting utilities we never use) by
+# pyannote.audio.tasks.segmentation.mixins, but not declared as a hard
+# dependency by pyannote -- without it, importing the pipeline class crashes
+# before we ever get to use_auth_token/gating errors.
+matplotlib
+# speechbrain>=1.0's lazy-module system (used for an optional k2/k2_fsa
+# integration we never touch) crashes during an unrelated pytorch_lightning
+# stack-introspection call with "No module named 'k2'". The fix is to
+# downgrade to the last pre-1.0 release, which sidesteps the lazy-import
+# machinery entirely (confirmed working in practice -- the speechbrain APIs
+# pyannote 3.3.2 actually calls are unaffected by the 1.0 lazy-loading
+# rewrite) -- but pip's resolver hard-fails if asked to satisfy this pin
+# and pyannote-audio's declared `speechbrain>=1.0.0` in the same pass, so
+# it's installed as a separate downgrade step in Dockerfile.worker instead
+# of listed here.
 openai-whisper==20250625
+# Pinned to the 3.x line (not the newer 4.x major) since the
+# pyannote/speaker-diarization-3.1 pretrained pipeline this project uses was
+# released and is documented against pyannote.audio 3.x.
+pyannote.audio==3.3.2

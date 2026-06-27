@@ -1,21 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { deleteMeeting, getMeeting, getTranscript } from "../api/meetings";
+import { deleteMeeting, getMeeting, getSpeakers, getTranscript, renameSpeaker } from "../api/meetings";
+import { SpeakerStatsPanel } from "../components/SpeakerStatsPanel";
 import { StatusBadge } from "../components/StatusBadge";
 import { TranscriptView } from "../components/TranscriptView";
+import { speakerDisplayName } from "../utils/speakers";
 
-const POLL_INTERVAL_MS = 3000;
-const ACTIVE_STATUSES = new Set(["uploaded", "processing"]);
-const TRANSCRIBED_STATUSES = new Set(["transcribed", "completed"]);
+const POLL_INTERVAL_MS = 2000;
+const TERMINAL_STATUSES = new Set(["completed", "failed"]);
+const TRANSCRIPT_VISIBLE_STATUSES = new Set(["transcribed", "diarizing", "completed"]);
 
 export function MeetingDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState(null);
   const [segments, setSegments] = useState([]);
+  const [speakers, setSpeakers] = useState([]);
   const [error, setError] = useState(null);
-  const segmentsLoadedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,13 +29,21 @@ export function MeetingDetailPage() {
         if (cancelled) return;
         setMeeting(data);
 
-        if (TRANSCRIBED_STATUSES.has(data.status) && !segmentsLoadedRef.current) {
-          segmentsLoadedRef.current = true;
+        if (TRANSCRIPT_VISIBLE_STATUSES.has(data.status)) {
+          // Refetched every tick (not just once): speaker_label on each
+          // segment only gets filled in once diarization finishes, so an
+          // earlier fetch (while still "transcribed") would otherwise be
+          // permanently missing it.
           const segs = await getTranscript(id);
           if (!cancelled) setSegments(segs);
         }
 
-        if (!ACTIVE_STATUSES.has(data.status)) {
+        if (data.status === "completed") {
+          const sp = await getSpeakers(id);
+          if (!cancelled) setSpeakers(sp);
+        }
+
+        if (TERMINAL_STATUSES.has(data.status)) {
           clearInterval(intervalId);
         }
       } catch {
@@ -55,6 +65,13 @@ export function MeetingDetailPage() {
     if (!window.confirm("Delete this meeting? This cannot be undone.")) return;
     await deleteMeeting(id);
     navigate("/");
+  }
+
+  async function handleRename(speaker) {
+    const next = window.prompt(`Rename ${speakerDisplayName(speaker)} to:`, speaker.display_name || "");
+    if (next === null) return;
+    const updated = await renameSpeaker(id, speaker.speaker_label, next.trim() || null);
+    setSpeakers((prev) => prev.map((s) => (s.speaker_label === updated.speaker_label ? updated : s)));
   }
 
   if (error) {
@@ -94,21 +111,42 @@ export function MeetingDetailPage() {
         )}
       </dl>
 
-      <section className="transcript-section">
-        <h2>Transcript</h2>
-        {ACTIVE_STATUSES.has(meeting.status) && (
-          <p className="transcript-status">
-            <span className="spinner" aria-hidden="true" />
-            Transcribing this recording... this can take a minute or two depending on length.
-          </p>
-        )}
-        {meeting.status === "failed" && (
-          <p className="form-error">
-            Transcription failed: {meeting.processing_error || "An unknown error occurred."}
-          </p>
-        )}
-        {TRANSCRIBED_STATUSES.has(meeting.status) && <TranscriptView segments={segments} />}
-      </section>
+      {meeting.status === "failed" && (
+        <p className="form-error">
+          Processing failed: {meeting.processing_error || "An unknown error occurred."}
+        </p>
+      )}
+
+      {(meeting.status === "uploaded" || meeting.status === "processing") && (
+        <p className="transcript-status">
+          <span className="spinner" aria-hidden="true" />
+          <span>
+            {meeting.processing_progress || "Transcribing this recording..."}
+            <span className="transcript-status__hint">
+              {" "}
+              this can take a minute or two depending on length
+            </span>
+          </span>
+        </p>
+      )}
+
+      {meeting.status === "diarizing" && (
+        <p className="transcript-status">
+          <span className="spinner" aria-hidden="true" />
+          <span>{meeting.processing_progress || "Identifying speakers..."}</span>
+        </p>
+      )}
+
+      {meeting.status === "completed" && (
+        <SpeakerStatsPanel speakers={speakers} onRename={handleRename} />
+      )}
+
+      {TRANSCRIPT_VISIBLE_STATUSES.has(meeting.status) && (
+        <section className="transcript-section">
+          <h2>Transcript</h2>
+          <TranscriptView segments={segments} speakers={speakers} />
+        </section>
+      )}
 
       <button onClick={handleDelete}>Delete meeting</button>
     </div>

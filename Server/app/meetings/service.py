@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.meeting import Meeting, MeetingStatus
+from app.models.speaker_stats import SpeakerStats
 from app.models.transcript_segment import TranscriptSegment
 from app.storage.base import StorageClient
 from app.storage.validation import SNIFF_BYTES, has_allowed_extension, sniff_media_signature
@@ -116,3 +117,33 @@ def list_transcript_segments(db: Session, *, meeting_id: uuid.UUID) -> list[Tran
         .order_by(TranscriptSegment.start_time)
         .all()
     )
+
+
+def list_speaker_stats(db: Session, *, meeting_id: uuid.UUID) -> list[SpeakerStats]:
+    return (
+        db.query(SpeakerStats)
+        .filter(SpeakerStats.meeting_id == meeting_id)
+        .order_by(SpeakerStats.total_speaking_seconds.desc())
+        .all()
+    )
+
+
+def get_owned_speaker_stat(db: Session, *, meeting_id: uuid.UUID, speaker_label: str) -> SpeakerStats:
+    """Caller must already have verified meeting ownership (e.g. via
+    `get_owned_meeting`) -- this only scopes by meeting_id + label."""
+    stat = (
+        db.query(SpeakerStats)
+        .filter(SpeakerStats.meeting_id == meeting_id, SpeakerStats.speaker_label == speaker_label)
+        .first()
+    )
+    if stat is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Speaker not found")
+    return stat
+
+
+def rename_speaker(db: Session, *, stat: SpeakerStats, display_name: str | None) -> SpeakerStats:
+    cleaned = display_name.strip() if display_name else None
+    stat.display_name = cleaned or None
+    db.commit()
+    db.refresh(stat)
+    return stat

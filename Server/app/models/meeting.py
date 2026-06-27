@@ -12,6 +12,7 @@ class MeetingStatus:
     UPLOADED = "uploaded"
     PROCESSING = "processing"
     TRANSCRIBED = "transcribed"
+    DIARIZING = "diarizing"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -32,9 +33,19 @@ class Meeting(Base):
     )
     language_detected: Mapped[str | None] = mapped_column(String(10), nullable=True)
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free-text, e.g. "Transcribing audio: 45%" or "Diarization: extracting
+    # voice embeddings (3/12)". Best-effort progress for the UI -- cleared
+    # whenever status moves to a new stage, never load-bearing for anything.
+    processing_progress: Mapped[str | None] = mapped_column(String(255), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     owner: Mapped["User"] = relationship(back_populates="meetings")
     transcript_segments: Mapped[list["TranscriptSegment"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="TranscriptSegment.start_time"
+    )
+    speaker_segments: Mapped[list["SpeakerSegment"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="SpeakerSegment.start_time"
+    )
+    speaker_stats: Mapped[list["SpeakerStats"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True
     )

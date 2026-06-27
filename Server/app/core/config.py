@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     # Speech-to-text (worker-only; harmless for the API process to know about)
     whisper_model_size: str = "base"
 
+    # Speaker diarization (worker-only). pyannote/speaker-diarization-3.1 is
+    # gated on Hugging Face: create a free account, accept the model's terms
+    # at https://huggingface.co/pyannote/speaker-diarization-3.1, and set
+    # this to an access token from https://huggingface.co/settings/tokens.
+    hf_token: str = ""
+    pyannote_pipeline_name: str = "pyannote/speaker-diarization-3.1"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

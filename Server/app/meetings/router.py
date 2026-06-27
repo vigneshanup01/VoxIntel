@@ -9,6 +9,7 @@ from app.meetings import service
 from app.models.audit_log import AuditAction
 from app.models.user import User
 from app.schemas.meeting import MeetingListResponse, MeetingOut, MeetingStatusOut
+from app.schemas.speaker import RenameSpeakerRequest, SpeakerStatsListResponse, SpeakerStatsOut
 from app.schemas.transcript import TranscriptResponse, TranscriptSegmentOut
 from app.services.audit import log_action
 from app.storage.base import StorageClient
@@ -77,7 +78,11 @@ def get_meeting_status(
     db: Session = Depends(get_db),
 ) -> MeetingStatusOut:
     meeting = service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
-    return MeetingStatusOut(status=meeting.status, processing_error=meeting.processing_error)
+    return MeetingStatusOut(
+        status=meeting.status,
+        processing_error=meeting.processing_error,
+        processing_progress=meeting.processing_progress,
+    )
 
 
 @router.get("/{meeting_id}/transcript", response_model=TranscriptResponse)
@@ -89,3 +94,28 @@ def get_meeting_transcript(
     service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
     segments = service.list_transcript_segments(db, meeting_id=meeting_id)
     return TranscriptResponse(segments=[TranscriptSegmentOut.model_validate(s) for s in segments])
+
+
+@router.get("/{meeting_id}/speakers", response_model=SpeakerStatsListResponse)
+def get_meeting_speakers(
+    meeting_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SpeakerStatsListResponse:
+    service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
+    stats = service.list_speaker_stats(db, meeting_id=meeting_id)
+    return SpeakerStatsListResponse(speakers=[SpeakerStatsOut.model_validate(s) for s in stats])
+
+
+@router.patch("/{meeting_id}/speakers/{speaker_label}", response_model=SpeakerStatsOut)
+def rename_meeting_speaker(
+    meeting_id: uuid.UUID,
+    speaker_label: str,
+    payload: RenameSpeakerRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SpeakerStatsOut:
+    service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
+    stat = service.get_owned_speaker_stat(db, meeting_id=meeting_id, speaker_label=speaker_label)
+    updated = service.rename_speaker(db, stat=stat, display_name=payload.display_name)
+    return SpeakerStatsOut.model_validate(updated)

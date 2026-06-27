@@ -2,6 +2,7 @@ const STATUS_LABELS = {
   uploaded: "Uploaded",
   processing: "Processing",
   transcribed: "Transcribed",
+  diarizing: "Identifying speakers",
   completed: "Completed",
   failed: "Failed",
 };

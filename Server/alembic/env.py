@@ -5,7 +5,14 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
-from app.models import AuditLog, Meeting, TranscriptSegment, User  # noqa: F401 -- registers models on Base.metadata
+from app.models import (  # noqa: F401 -- registers models on Base.metadata
+    AuditLog,
+    Meeting,
+    SpeakerSegment,
+    SpeakerStats,
+    TranscriptSegment,
+    User,
+)
 
 config = context.config
 

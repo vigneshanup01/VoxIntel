@@ -6,14 +6,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # ffmpeg is required by Whisper to decode audio/video into the raw samples
-# it transcribes -- missing it is a classic "works in my notebook, not in
+# it transcribes; libsndfile1 is required by Pyannote's audio I/O backend
+# (soundfile) -- missing either is a classic "works in my notebook, not in
 # the container" trap.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc ffmpeg \
+    libpq-dev gcc ffmpeg libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt requirements-worker.txt ./
 RUN pip install --no-cache-dir -r requirements-worker.txt
+# Must run as a separate step, after pyannote.audio is already installed:
+# pip's resolver hard-fails up front if asked to satisfy
+# `speechbrain==0.5.16` and pyannote-audio's declared `speechbrain>=1.0.0`
+# in the same pass, but only warns (and succeeds) when downgrading an
+# already-installed package afterward -- see requirements-worker.txt for why
+# this specific downgrade is needed.
+RUN pip install --no-cache-dir "speechbrain==0.5.16"
 
 COPY . .
 

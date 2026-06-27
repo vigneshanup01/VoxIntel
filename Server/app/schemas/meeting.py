@@ -14,6 +14,7 @@ class MeetingOut(BaseModel):
     status: str
     language_detected: str | None
     processing_error: str | None
+    processing_progress: str | None
     uploaded_at: datetime
 
 
@@ -24,3 +25,4 @@ class MeetingListResponse(BaseModel):
 class MeetingStatusOut(BaseModel):
     status: str
     processing_error: str | None
+    processing_progress: str | None

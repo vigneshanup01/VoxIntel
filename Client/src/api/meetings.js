@@ -36,3 +36,13 @@ export function getMeetingStatus(id) {
 export function getTranscript(id) {
   return apiClient.get(`/meetings/${id}/transcript`).then((res) => res.data.segments);
 }
+
+export function getSpeakers(id) {
+  return apiClient.get(`/meetings/${id}/speakers`).then((res) => res.data.speakers);
+}
+
+export function renameSpeaker(id, speakerLabel, displayName) {
+  return apiClient
+    .patch(`/meetings/${id}/speakers/${encodeURIComponent(speakerLabel)}`, { display_name: displayName })
+    .then((res) => res.data);
+}
