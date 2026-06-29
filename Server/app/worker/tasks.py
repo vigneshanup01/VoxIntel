@@ -5,8 +5,13 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.config import get_settings
 from app.db.session import SessionLocal
+from app.models.action_item import ActionItem
+from app.models.decision import Decision
 from app.models.meeting import Meeting, MeetingStatus
+from app.models.meeting_quote import MeetingQuote
+from app.models.meeting_summary import MeetingSummary
 from app.models.speaker_segment import SpeakerSegment
 from app.models.speaker_stats import SpeakerStats
 from app.models.transcript_segment import TranscriptSegment
@@ -15,6 +20,7 @@ from app.worker.alignment import assign_speaker_labels, compute_speaker_stats
 from app.worker.audio import convert_to_wav, get_audio_duration_seconds
 from app.worker.celery_app import celery_app
 from app.worker.diarization import diarize_audio_file
+from app.worker.summarization import summarize_transcript
 from app.worker.transcription import segments_from_whisper_result, transcribe_audio_file
 
 # Floor between progress writes: Whisper's tqdm hook can fire many times a
@@ -137,12 +143,14 @@ def transcribe_meeting(meeting_id: str) -> None:
 @celery_app.task(name="diarize_meeting")
 def diarize_meeting(meeting_id: str) -> None:
     db = SessionLocal()
+    failed = False
     try:
         meeting = db.get(Meeting, uuid.UUID(meeting_id))
         if meeting is None:
             return
 
         meeting.status = MeetingStatus.DIARIZING
+        meeting.processing_error = None
         meeting.processing_progress = None
         db.commit()
 
@@ -201,6 +209,107 @@ def diarize_meeting(meeting_id: str) -> None:
 
         if meeting.duration_seconds is None:
             meeting.duration_seconds = duration
+
+        # Terminal "completed" now belongs to summarize_meeting, the next
+        # link in the chain -- DIARIZED is the same kind of transitional
+        # "done with this stage, queued for the next one" status that
+        # TRANSCRIBED is between transcribe_meeting and diarize_meeting.
+        meeting.status = MeetingStatus.DIARIZED
+        meeting.processing_progress = None
+        db.commit()
+    except Exception as exc:
+        _fail(db, meeting_id, str(exc))
+        failed = True
+    finally:
+        db.close()
+
+    if failed:
+        return
+
+    try:
+        summarize_meeting.delay(meeting_id)
+    except Exception as exc:
+        db = SessionLocal()
+        try:
+            _fail(db, meeting_id, f"Could not queue for summarization: {exc}")
+        finally:
+            db.close()
+
+
+@celery_app.task(name="summarize_meeting")
+def summarize_meeting(meeting_id: str) -> None:
+    db = SessionLocal()
+    try:
+        meeting = db.get(Meeting, uuid.UUID(meeting_id))
+        if meeting is None:
+            return
+
+        meeting.status = MeetingStatus.SUMMARIZING
+        meeting.processing_error = None
+        meeting.processing_progress = None
+        db.commit()
+
+        report_progress = _make_progress_reporter(meeting_id)
+        report_progress("Summarizing: preparing transcript")
+
+        transcript_segments = (
+            db.query(TranscriptSegment)
+            .filter(TranscriptSegment.meeting_id == meeting.id)
+            .order_by(TranscriptSegment.start_time)
+            .all()
+        )
+        speaker_stats = db.query(SpeakerStats).filter(SpeakerStats.meeting_id == meeting.id).all()
+        display_names = {stat.speaker_label: stat.display_name for stat in speaker_stats if stat.display_name}
+
+        segment_rows = [
+            {"start_time": seg.start_time, "text": seg.text, "speaker_label": seg.speaker_label}
+            for seg in transcript_segments
+        ]
+
+        result = summarize_transcript(segment_rows, display_names, on_progress=report_progress)
+
+        # See the matching comment in transcribe_meeting/diarize_meeting:
+        # the progress reporter wrote through separate sessions, so this
+        # session's cached `meeting` needs a refresh before we touch it again.
+        db.refresh(meeting)
+        report_progress("Summarizing: saving results")
+
+        # Regenerating a summary (manual "Regenerate" trigger) replaces
+        # everything from the previous run rather than appending to it.
+        db.query(MeetingSummary).filter(MeetingSummary.meeting_id == meeting.id).delete()
+        db.query(ActionItem).filter(ActionItem.meeting_id == meeting.id).delete()
+        db.query(Decision).filter(Decision.meeting_id == meeting.id).delete()
+        db.query(MeetingQuote).filter(MeetingQuote.meeting_id == meeting.id).delete()
+
+        db.add(
+            MeetingSummary(
+                meeting_id=meeting.id,
+                executive_summary=result.executive_summary,
+                detailed_summary=result.detailed_summary,
+                model_used=get_settings().anthropic_model,
+            )
+        )
+        for item in result.action_items:
+            db.add(
+                ActionItem(
+                    meeting_id=meeting.id,
+                    description=item.description,
+                    owner=item.owner,
+                    due_date=item.due_date,
+                )
+            )
+        for decision in result.decisions:
+            db.add(Decision(meeting_id=meeting.id, description=decision.description))
+        for quote in result.quotes:
+            db.add(
+                MeetingQuote(
+                    meeting_id=meeting.id,
+                    quote_text=quote.quote_text,
+                    speaker_label=quote.speaker_label,
+                    timestamp_seconds=quote.timestamp_seconds,
+                    category=quote.category,
+                )
+            )
 
         meeting.status = MeetingStatus.COMPLETED
         meeting.processing_progress = None

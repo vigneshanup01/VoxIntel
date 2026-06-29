@@ -13,6 +13,8 @@ class MeetingStatus:
     PROCESSING = "processing"
     TRANSCRIBED = "transcribed"
     DIARIZING = "diarizing"
+    DIARIZED = "diarized"
+    SUMMARIZING = "summarizing"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -47,5 +49,17 @@ class Meeting(Base):
         back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="SpeakerSegment.start_time"
     )
     speaker_stats: Mapped[list["SpeakerStats"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True
+    )
+    summary: Mapped["MeetingSummary | None"] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, uselist=False
+    )
+    action_items: Mapped[list["ActionItem"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="ActionItem.created_at"
+    )
+    decisions: Mapped[list["Decision"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True, order_by="Decision.created_at"
+    )
+    quotes: Mapped[list["MeetingQuote"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", passive_deletes=True
     )

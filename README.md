@@ -1,5 +1,5 @@
 # VoxIntel
-AI-powered meeting intelligence platform for transcription, speaker tracking, emotion analysis, meeting analytics, and automated summaries.
+AI-powered meeting intelligence platform for transcription, speaker tracking, automated summaries, and cross-meeting search/analytics. (Sentiment/emotion analysis was scoped and deliberately skipped -- see Phase 5 below.)
 
 ## Phase 1: Auth, upload, dashboard
 
@@ -8,6 +8,7 @@ Auth, meeting upload/storage, and a dashboard -- the foundation later phases
 
 - **Server/** -- FastAPI backend (auth, meetings CRUD, MinIO/S3 storage, Postgres via SQLAlchemy + Alembic)
 - **Client/** -- React + Vite frontend (login/signup, dashboard, meeting detail)
+- **docker/**, **docs/** -- reserved for deployment configs and documentation as the project grows
 
 ## Phase 2: Speech-to-text
 
@@ -27,7 +28,7 @@ HTTP request.
 - `GET /meetings/{id}/status` and `GET /meetings/{id}/transcript` let the
   frontend poll progress and fetch results.
 
-## Phase 3: Speaker diarization (current)
+## Phase 3: Speaker diarization
 
 *Who* said each thing, not just *what* was said. Transcription (Whisper) and
 diarization (Pyannote) are two independent pipelines over the same audio --
@@ -62,13 +63,140 @@ timestamp overlap.
   set `HF_TOKEN`. Without it, transcription still works fine -- diarization
   just fails with a clear error instead of a name.
 
-- **ai-services/** -- reserved for later phases (emotion, summarization)
-- **docker/**, **docs/** -- reserved for deployment configs and documentation as the project grows
+## Phase 5: Sentiment/emotion analysis -- deliberately skipped
+
+An earlier plan for this project included a phase that would tag transcript
+segments (or speakers) with detected sentiment/emotion. It's skipped here, on
+purpose, not because it's technically hard but because the risk/reward is bad
+for a meeting-recording product specifically:
+
+- **The underlying ML is shakier than it's usually presented as.** Voice- and
+  text-based emotion recognition has well-documented accuracy and
+  cross-cultural validity problems -- confidently-labeled "anger" or
+  "frustration" output is often not measuring what it claims to measure, and
+  errors aren't evenly distributed: published work on these models shows
+  measurably worse accuracy for some accents, dialects, and demographic
+  groups than others.
+- **The privacy/workplace-surveillance exposure is real, not hypothetical.**
+  This product processes recordings of people's actual work meetings. Adding
+  a feature that algorithmically scores colleagues' emotional state during
+  those meetings -- even with good intentions -- creates a plausible path to
+  misuse (informal performance judgments, a chilling effect on candid
+  discussion) that the rest of this project's features don't.
+- **The regulatory ground is actively shifting under workplace emotion
+  recognition specifically** (e.g. it's called out as a higher-scrutiny use
+  case under the EU AI Act), which is a bad combination with the accuracy
+  problem above -- it's exactly the kind of feature that looks like a fun demo
+  and turns into a liability question in production.
+
+Skipping it is the engineering decision here, not an oversight: the judgment
+call was that "speaker talked for N minutes and said X" (Phases 3-4) is
+useful and defensible, while "speaker was probably feeling Y" is neither
+reliable enough nor safe enough to ship without a lot more validation than a
+capstone-scale project can give it.
+
+## Phase 4: AI summaries
+
+The last link in the pipeline: once a meeting is transcribed and diarized,
+`summarize_meeting` sends the transcript to Claude and turns it into
+something a busy person could actually use.
+
+- `summarize_meeting` is a third Celery task, chained automatically after
+  `diarize_meeting` succeeds: `... -> diarized -> summarizing -> completed`
+  (or `failed` at any stage). It's also manually triggerable any time a
+  transcript exists, via `POST /meetings/{id}/summarize` -- e.g. the
+  frontend's "Regenerate summary" button.
+- It builds a timestamped, speaker-attributed transcript (resolving
+  `speaker_stats.display_name` where set), sends it to the Claude API with
+  **structured output** (`output_config.format` / JSON schema) so the
+  response is always parseable JSON rather than free-text it has to
+  regex out, and validates the result against Pydantic models -- with one
+  retry if a response is somehow still malformed (truncation, refusal).
+  See `app/worker/summarization.py`.
+- Produces: an `executive_summary` + `detailed_summary`
+  (`meeting_summaries`), `action_items` (description, owner, due date --
+  never invented, only what the transcript actually states), `decisions`,
+  and notable/risk `quotes` with a timestamp the frontend can jump the
+  transcript view to.
+- Long transcripts (beyond `SINGLE_PASS_CHAR_LIMIT`, ~60K characters) are
+  handled with a map-reduce pass instead of one giant prompt: each chunk is
+  summarized independently (action items/decisions/quotes extracted per
+  chunk), then a final pass combines the partial summaries into one
+  coherent executive/detailed summary.
+- `GET /meetings/{id}/summary`, `/action-items` (+ `PATCH` to check one off),
+  `/decisions`, and `/quotes` round out the API.
+- **Setup required:** generate a key at
+  https://console.anthropic.com/settings/keys and set `ANTHROPIC_API_KEY`
+  in the root `.env` (see `.env.example`) -- **never commit a real key**.
+  Without it, transcription and diarization still work fine; summarization
+  just fails with a clear "ANTHROPIC_API_KEY is not set" error instead of a
+  summary. `ANTHROPIC_MODEL` (default `claude-opus-4-8`) is also
+  overridable if you want a cheaper/faster model for this step.
+
+## Phase 6: Dashboard, search & analytics (current)
+
+By Phase 4, every meeting individually has a transcript, speakers, and a
+summary. Phase 6 doesn't add a new ML stage -- it rolls that *per-meeting*
+data up into *cross-meeting* views: a home dashboard, search across
+everything you've uploaded, per-speaker analytics over time, and a
+downloadable report. No new core tables; mostly indexes and queries over
+what already exists (migration `0006`).
+
+- **`GET /dashboard/summary`** -- total meetings, total hours, meetings
+  uploaded in the last 7 days, the most-talked speaker (named speakers
+  only, see below), and the 5 most recent meetings.
+- **`GET /meetings/search?q=&speaker=&from=&to=`** -- a meeting matches `q`
+  if it's in the title *or* anywhere in its transcript; matches `speaker`
+  if any of its speaker_stats rows' label or display name contains it.
+  Paginated (`limit`/`offset`).
+- **`GET /search/transcripts?q=`** -- segment-level results across all of
+  a user's meetings, each with a timestamp and snippet, for "jump straight
+  to where this was said." The frontend's search page links each result to
+  `/meetings/{id}?t={seconds}`, which scrolls the transcript view to (and
+  briefly highlights) the nearest segment.
+- **`GET /analytics/speakers?from=&to=`** -- per-speaker total speaking
+  time aggregated *across* meetings, with a date range. This only works
+  for speakers with a `display_name` set (Phase 3's rename feature) --
+  `SPEAKER_00` in one meeting and `SPEAKER_00` in another are not
+  necessarily the same person, so unnamed rows are counted and excluded,
+  never silently merged into a stranger's total. The response says how
+  many were excluded; the frontend says so too.
+- **`GET /meetings/{id}/report.pdf`** -- renders the summary, action
+  items, decisions, quotes, and speaker breakdown to HTML, then to PDF via
+  WeasyPrint. Needs a summary to exist first (400 if not).
+- Full-text search uses Postgres's built-in `tsvector`/`GIN` index
+  (migration `0006`) rather than `LIKE '%term%'` or a separate search
+  service -- plenty for a project's worth of meetings, and the honest
+  answer for "how would this scale" is "read replicas / materialized
+  views," not "we'd add Elasticsearch." The search/dashboard/analytics
+  query logic falls back to a portable `ILIKE` match when not running on
+  Postgres (e.g. the SQLite-backed test suite) -- same behavior, different
+  performance characteristics; see `app/search/service.py`.
+
+## Optional: GPU acceleration for diarization
+
+Diarization (Pyannote) is CPU-only by default and noticeably slow on a
+real meeting -- minutes, not seconds. If you have an NVIDIA GPU, driver,
+and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+installed, `docker-compose.yml`'s `worker` service already reserves the
+GPU, and `app/worker/diarization.py` moves the Pyannote pipeline onto it
+automatically (`torch.cuda.is_available()` -- a no-op everywhere else, so
+nothing breaks on a CPU-only machine running the *code*). Whisper does
+this on its own already, with no code needed.
+
+This *is* a hard requirement in `docker-compose.yml` as checked in --
+`docker compose up` will fail to start the `worker` service on a machine
+without all three. If you're running this on a machine without an NVIDIA
+GPU, delete the `worker.deploy.resources.reservations.devices` block; both
+pipelines fall back to CPU with no other changes. (Measured speedup on
+this project's dev machine, an RTX 3050 laptop GPU: a real ~11-minute
+meeting's diarization dropped from roughly 15-20 minutes to under a
+minute.)
 
 ## Running locally with Docker
 
 ```bash
-cp .env.example .env   # then fill in HF_TOKEN -- see Phase 3 setup above
+cp .env.example .env   # then fill in HF_TOKEN and ANTHROPIC_API_KEY -- see Phase 3/4 setup above
 docker compose up --build
 ```
 
@@ -77,6 +205,12 @@ worker, and the frontend. Migrations run automatically on API/worker
 startup. The worker image is significantly heavier than the API image (it
 bundles `torch`, `whisper`, and `pyannote.audio`) -- expect the first
 `--build` to take a long time (the combined dependency tree is large).
+
+> `docker-compose.yml`'s `worker` service is currently checked in with a
+> **hard NVIDIA GPU requirement** (see "Optional: GPU acceleration" above)
+> -- on a machine without one, `docker compose up` will fail to start the
+> worker. Delete the `worker.deploy.resources.reservations.devices` block
+> to run CPU-only.
 
 | Service | URL |
 |---|---|
@@ -113,8 +247,8 @@ uvicorn app.main:app --reload
 ```
 
 To also run the worker on your host, install its (heavier) requirements,
-make sure `ffmpeg` is on your PATH, set `HF_TOKEN` in `Server/.env` (see
-Phase 3 above), then run Celery directly:
+make sure `ffmpeg` is on your PATH, set `HF_TOKEN` and `ANTHROPIC_API_KEY`
+in `Server/.env` (see Phase 3/4 above), then run Celery directly:
 
 ```bash
 pip install -r requirements-worker.txt
@@ -122,9 +256,12 @@ celery -A app.worker.tasks worker --loglevel=info --pool=solo
 ```
 
 Run the test suite (no external services needed -- it uses SQLite and an
-in-memory storage fake; the two tests that run real model inference
-[Whisper, Pyannote] auto-skip unless their respective dependencies,
-`ffmpeg`, and -- for Pyannote -- `HF_TOKEN` are all available):
+in-memory storage fake; the three tests that make real calls out [Whisper,
+Pyannote, Claude] auto-skip unless their respective dependencies and
+credentials -- `ffmpeg`, `HF_TOKEN`, `ANTHROPIC_API_KEY` -- are available,
+and the one real-PDF-rendering report test skips if WeasyPrint's native
+Pango/Cairo libraries aren't installed on your host -- they usually aren't
+on plain Windows, see Phase 6 above):
 
 ```bash
 pytest

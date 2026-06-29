@@ -3,6 +3,8 @@ const STATUS_LABELS = {
   processing: "Processing",
   transcribed: "Transcribed",
   diarizing: "Identifying speakers",
+  diarized: "Diarized",
+  summarizing: "Summarizing",
   completed: "Completed",
   failed: "Failed",
 };

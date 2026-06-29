@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     hf_token: str = ""
     pyannote_pipeline_name: str = "pyannote/speaker-diarization-3.1"
 
+    # AI summaries (worker-only). Generate a key at
+    # https://console.anthropic.com/settings/keys. Without it, transcription
+    # and diarization still work fine -- summarization just fails with a
+    # clear "ANTHROPIC_API_KEY is not set" error instead of a summary.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-opus-4-8"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

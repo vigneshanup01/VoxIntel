@@ -7,9 +7,17 @@ export function Navbar() {
 
   return (
     <header className="navbar">
-      <Link to="/" className="navbar__brand">
-        VoxIntel
-      </Link>
+      <div className="navbar__links">
+        <Link to="/" className="navbar__brand">
+          VoxIntel
+        </Link>
+        {user && (
+          <nav className="navbar__nav">
+            <Link to="/search">Search</Link>
+            <Link to="/analytics">Analytics</Link>
+          </nav>
+        )}
+      </div>
       {user && (
         <div className="navbar__user">
           <span>{user.full_name || user.email}</span>

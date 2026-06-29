@@ -70,6 +70,13 @@ def stub_enqueue_transcription(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(meetings_service, "enqueue_transcription", lambda meeting_id: None)
 
 
+@pytest.fixture(autouse=True)
+def stub_enqueue_summarization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Same idea as stub_enqueue_transcription, for the (Re)generate summary
+    trigger -- tests don't have a broker."""
+    monkeypatch.setattr(meetings_service, "enqueue_summarization", lambda meeting_id: None)
+
+
 @pytest.fixture()
 def client(test_engine: Engine, fake_storage: FakeStorageClient) -> Generator[TestClient, None, None]:
     testing_session_local = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)

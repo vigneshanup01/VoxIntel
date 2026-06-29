@@ -54,10 +54,21 @@ button:disabled {
   border-bottom: 1px solid var(--color-border);
 }
 
+.navbar__links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .navbar__brand {
   font-weight: 700;
   font-size: 1.25rem;
   color: var(--color-text);
+}
+
+.navbar__nav {
+  display: flex;
+  gap: 1rem;
 }
 
 .navbar__user {
@@ -181,7 +192,9 @@ th {
 }
 
 .status-badge--processing,
-.status-badge--diarizing {
+.status-badge--diarizing,
+.status-badge--diarized,
+.status-badge--summarizing {
   background: #fdf0d5;
   color: #9a6700;
 }
@@ -336,4 +349,232 @@ th {
 
 .transcript__speaker {
   color: var(--color-primary-dark);
+}
+
+.transcript__segment--highlighted {
+  background: #fff6d6;
+  border-radius: 4px;
+}
+
+.summary-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.summary-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-panel__header h2 {
+  margin: 0;
+}
+
+.summary-panel__header button {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.summary-panel__executive {
+  font-weight: 600;
+  margin: 0;
+}
+
+.summary-panel__detailed {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.summary-panel__section h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.action-items-list,
+.decisions-list,
+.quotes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.action-items-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.action-items-list__item label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.action-items-list__item input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+}
+
+.action-items-list__done {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+.action-items-list__meta {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin-left: 1.5rem;
+}
+
+.decisions-list li {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--color-primary);
+}
+
+.quotes-list__item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--color-border);
+}
+
+.quotes-list__item--risk {
+  border-left-color: var(--color-danger);
+}
+
+.quotes-list__timestamp {
+  flex-shrink: 0;
+  background: none;
+  color: var(--color-primary);
+  padding: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.quotes-list__timestamp:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+.quotes-list__timestamp:disabled {
+  background: none;
+  color: var(--color-muted);
+  cursor: default;
+}
+
+.quotes-list__risk-tag {
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  text-transform: uppercase;
+}
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.stat-card__value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.stat-card__label {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.search-filters input[type="text"],
+.search-filters input[type="date"] {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.search-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.search-results {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.search-meeting-list,
+.search-transcript-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.search-meeting-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.search-transcript-list li {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 0.75rem;
+}
+
+.search-transcript-list p {
+  margin: 0.2rem 0 0;
+  color: var(--color-text);
+}
+
+mark {
+  background: #fff6d6;
+  color: inherit;
+  padding: 0 2px;
+}
+
+.analytics-chart {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.25rem;
 }

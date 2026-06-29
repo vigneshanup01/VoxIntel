@@ -13,3 +13,7 @@ python-multipart==0.0.20
 boto3==1.35.81
 celery==5.4.0
 redis==5.2.1
+# Phase 6: per-meeting PDF reports (HTML -> PDF). Needs Pango/Cairo system
+# libraries -- see Server/Dockerfile. Lazy-imported in app/meetings/report.py
+# so it's an optional dependency for local (non-Docker) development.
+weasyprint==69.0

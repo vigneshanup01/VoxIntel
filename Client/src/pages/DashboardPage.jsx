@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { getDashboardSummary } from "../api/dashboard";
 import { deleteMeeting, listMeetings, uploadMeeting } from "../api/meetings";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -10,6 +11,7 @@ export function DashboardPage() {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
+  const [summary, setSummary] = useState(null);
 
   const [title, setTitle] = useState("");
   const [file, setFile] = useState(null);
@@ -20,8 +22,9 @@ export function DashboardPage() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listMeetings();
+      const [data, summaryData] = await Promise.all([listMeetings(), getDashboardSummary()]);
       setMeetings(data);
+      setSummary(summaryData);
       setLoadError(null);
     } catch {
       setLoadError("Could not load meetings.");
@@ -62,6 +65,27 @@ export function DashboardPage() {
 
   return (
     <div className="dashboard">
+      {summary && (
+        <section className="stat-cards">
+          <div className="stat-card">
+            <span className="stat-card__value">{summary.total_meetings}</span>
+            <span className="stat-card__label">Total meetings</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-card__value">{summary.total_hours}</span>
+            <span className="stat-card__label">Total hours</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-card__value">{summary.meetings_this_week}</span>
+            <span className="stat-card__label">This week</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-card__value">{summary.most_active_speaker || "--"}</span>
+            <span className="stat-card__label">Most active speaker</span>
+          </div>
+        </section>
+      )}
+
       <section className="upload-card">
         <h2>Upload a meeting recording</h2>
         <form onSubmit={handleUpload}>

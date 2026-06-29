@@ -71,6 +71,20 @@ services:
     build:
       context: ./Server
       dockerfile: Dockerfile.worker
+    # Requires an NVIDIA GPU + driver + the nvidia-container-toolkit on the
+    # Docker host (already the case here). This is a hard requirement, not
+    # an optional one -- `docker compose up` will fail to start this
+    # service on a machine without all three. If you ever run this stack
+    # on a non-GPU machine, delete this `deploy:` block (transcription/
+    # diarization both fall back to CPU automatically otherwise -- see
+    # app/worker/transcription.py and app/worker/diarization.py).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
       DATABASE_URL: postgresql+psycopg2://voxintel:voxintel@postgres:5432/voxintel
       STORAGE_ENDPOINT_URL: http://minio:9000
@@ -85,6 +99,11 @@ services:
       # the root .env.example for how to set this. Diarization fails with
       # a clear error (not a crash) if it's left blank.
       HF_TOKEN: ${HF_TOKEN:-}
+      # Phase 4 (AI summaries) -- see the root .env.example for how to set
+      # this. Summarization fails with a clear error (not a crash) if it's
+      # left blank.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: claude-opus-4-8
     depends_on:
       postgres:
         condition: service_healthy

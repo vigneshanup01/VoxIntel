@@ -46,3 +46,36 @@ export function renameSpeaker(id, speakerLabel, displayName) {
     .patch(`/meetings/${id}/speakers/${encodeURIComponent(speakerLabel)}`, { display_name: displayName })
     .then((res) => res.data);
 }
+
+export function getSummary(id) {
+  return apiClient.get(`/meetings/${id}/summary`).then((res) => res.data);
+}
+
+export function triggerSummarize(id) {
+  return apiClient.post(`/meetings/${id}/summarize`).then((res) => res.data);
+}
+
+export function getActionItems(id) {
+  return apiClient.get(`/meetings/${id}/action-items`).then((res) => res.data.action_items);
+}
+
+export function setActionItemCompleted(id, actionItemId, isCompleted) {
+  return apiClient
+    .patch(`/meetings/${id}/action-items/${actionItemId}`, { is_completed: isCompleted })
+    .then((res) => res.data);
+}
+
+export function getDecisions(id) {
+  return apiClient.get(`/meetings/${id}/decisions`).then((res) => res.data.decisions);
+}
+
+export function getQuotes(id) {
+  return apiClient.get(`/meetings/${id}/quotes`).then((res) => res.data.quotes);
+}
+
+export function downloadReportPdf(id) {
+  // The PDF endpoint needs the same Bearer token as every other request, so
+  // a plain <a href> can't hit it directly -- fetch as a blob and let the
+  // caller turn that into a download (see MeetingDetailPage's handler).
+  return apiClient.get(`/meetings/${id}/report.pdf`, { responseType: "blob" }).then((res) => res.data);
+}

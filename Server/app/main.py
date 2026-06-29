@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.analytics.router import router as analytics_router
 from app.auth.router import router as auth_router
 from app.core.config import get_settings
 from app.core.middleware import MaxBodySizeMiddleware
+from app.dashboard.router import router as dashboard_router
 from app.meetings.router import router as meetings_router
+from app.search.router import router as search_router
 
 settings = get_settings()
 
@@ -24,6 +27,9 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(meetings_router)
+app.include_router(dashboard_router)
+app.include_router(search_router)
+app.include_router(analytics_router)
 
 
 @app.get("/health")

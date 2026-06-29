@@ -6,7 +6,7 @@ function formatTimestamp(seconds) {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
-export function TranscriptView({ segments, speakers = [] }) {
+export function TranscriptView({ segments, speakers = [], highlightedSegmentId = null }) {
   if (segments.length === 0) {
     return <p>No speech was detected in this recording.</p>;
   }
@@ -16,7 +16,15 @@ export function TranscriptView({ segments, speakers = [] }) {
   return (
     <ol className="transcript">
       {segments.map((segment) => (
-        <li key={segment.id} className="transcript__segment">
+        <li
+          key={segment.id}
+          id={`segment-${segment.id}`}
+          className={
+            segment.id === highlightedSegmentId
+              ? "transcript__segment transcript__segment--highlighted"
+              : "transcript__segment"
+          }
+        >
           <span className="transcript__time">{formatTimestamp(segment.start_time)}</span>
           <span className="transcript__text">
             {segment.speaker_label && (

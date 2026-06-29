@@ -34,3 +34,8 @@ openai-whisper==20250625
 # pyannote/speaker-diarization-3.1 pretrained pipeline this project uses was
 # released and is documented against pyannote.audio 3.x.
 pyannote.audio==3.3.2
+# Phase 4: calls the Claude API to summarize transcripts. Pure HTTP client,
+# no native/ML deps, so unlike everything else in this file there's no
+# resolver-conflict story here -- just pinned for the same reproducibility
+# reasons as the rest of this file.
+anthropic==0.112.0

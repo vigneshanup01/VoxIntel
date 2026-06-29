@@ -22,6 +22,13 @@ class MeetingListResponse(BaseModel):
     meetings: list[MeetingOut]
 
 
+class MeetingSearchResponse(BaseModel):
+    meetings: list[MeetingOut]
+    total: int
+    limit: int
+    offset: int
+
+
 class MeetingStatusOut(BaseModel):
     status: str
     processing_error: str | None
