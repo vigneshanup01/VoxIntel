@@ -19,9 +19,12 @@ class S3StorageClient(StorageClient):
 
     def __init__(self) -> None:
         settings = get_settings()
-        print("ENDPOINT repr :", repr(settings.storage_endpoint_url))
-        print("ENDPOINT bytes:", list(settings.storage_endpoint_url.encode()))
-        print("ENDPOINT len  :", len(settings.storage_endpoint_url))
+        print("=" * 50)
+        print("ENDPOINT :", repr(settings.storage_endpoint_url))
+        print("BUCKET   :", repr(settings.storage_bucket))
+        print("REGION   :", repr(settings.storage_region))
+        print("KEY      :", repr(settings.storage_access_key))
+        print("=" * 50)
 
         self._bucket = settings.storage_bucket.strip()
         self._client = boto3.client(
