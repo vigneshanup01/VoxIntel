@@ -19,31 +19,15 @@ class S3StorageClient(StorageClient):
 
     def __init__(self) -> None:
         settings = get_settings()
-        self._bucket = settings.storage_bucket
+        self._bucket = settings.storage_bucket.strip()
         self._client = boto3.client(
             "s3",
-            endpoint_url=settings.storage_endpoint_url,
+            endpoint_url=settings.storage_endpoint_url.strip(),
             aws_access_key_id=settings.storage_access_key,
             aws_secret_access_key=settings.storage_secret_key,
             region_name=settings.storage_region,
             config=Config(signature_version="s3v4"),
         )
-        self._ensure_bucket()
-
-    def _ensure_bucket(self) -> None:
-        try:
-            self._client.head_bucket(Bucket=self._bucket)
-        except ClientError as e:
-            code = e.response.get("Error", {}).get("Code", "")
-            # 403/AccessDenied means the token lacks HeadBucket permission but
-            # can still read/write objects -- common with R2 "Object Read & Write"
-            # scoped tokens. Treat as bucket-exists and let actual operations fail
-            # if credentials are truly wrong.
-            if code in ("403", "AccessDenied"):
-                return
-            raise RuntimeError(
-                f"Bucket '{self._bucket}' does not exist or is not accessible."
-            ) from e
 
     def upload(self, fileobj: BinaryIO, key: str, content_type: str | None = None) -> None:
         extra_args = {"ContentType": content_type} if content_type else {}
