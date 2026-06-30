@@ -34,6 +34,13 @@ class S3StorageClient(StorageClient):
         try:
             self._client.head_bucket(Bucket=self._bucket)
         except ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            # 403/AccessDenied means the token lacks HeadBucket permission but
+            # can still read/write objects -- common with R2 "Object Read & Write"
+            # scoped tokens. Treat as bucket-exists and let actual operations fail
+            # if credentials are truly wrong.
+            if code in ("403", "AccessDenied"):
+                return
             raise RuntimeError(
                 f"Bucket '{self._bucket}' does not exist or is not accessible."
             ) from e
