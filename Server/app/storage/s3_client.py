@@ -34,7 +34,12 @@ class S3StorageClient(StorageClient):
         self._client.upload_fileobj(fileobj, self._bucket, key, ExtraArgs=extra_args)
 
     def download(self, key: str, destination: BinaryIO) -> None:
-        self._client.download_fileobj(self._bucket, key, destination)
+        # download_fileobj calls HeadObject first to determine content-length,
+        # which fails on R2 "Object Read & Write" tokens (403). GetObject works
+        # directly without a preflight HeadObject call.
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        for chunk in response["Body"].iter_chunks(chunk_size=8 * 1024 * 1024):
+            destination.write(chunk)
 
     def delete(self, key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=key)
