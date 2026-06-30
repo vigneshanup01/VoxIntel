@@ -72,6 +72,19 @@ def get_diarization_pipeline() -> Any:
             _pipeline = Pipeline.from_pretrained(settings.pyannote_pipeline_name, use_auth_token=settings.hf_token)
         finally:
             torch.load = _original_torch_load
+
+        # Reduce batch sizes to lower peak RAM during inference. Default is
+        # 32 which loads 32 audio chunks into GPU/CPU at once; 1 processes
+        # them sequentially -- slower but uses a fraction of the memory.
+        # Critical for memory-constrained cloud workers.
+        try:
+            _pipeline._segmentation.model.to_infer_batch_size = 1
+        except AttributeError:
+            pass
+        try:
+            _pipeline._embedding.to_infer_batch_size = 1
+        except AttributeError:
+            pass
     return _pipeline
 
 

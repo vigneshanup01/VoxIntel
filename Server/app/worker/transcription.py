@@ -16,17 +16,30 @@ _model = None
 
 
 def get_whisper_model() -> Any:
-    """Load the Whisper model once per worker process and reuse it.
-
-    Loading the model is the slow part -- reloading it per job would tank
-    worker throughput, so this is cached as a module-level singleton.
-    """
+    """Load the Whisper model once per worker process and reuse it."""
     global _model
     if _model is None:
         import whisper
 
         _model = whisper.load_model(get_settings().whisper_model_size)
     return _model
+
+
+def release_whisper_model() -> None:
+    """Unload the Whisper model from RAM.
+
+    Called after transcription completes and before diarization starts so
+    both models (Whisper + pyannote) are not in memory at the same time.
+    On a memory-constrained worker (e.g. Railway free tier) this is the
+    difference between diarization fitting in RAM or hitting OOM.
+    """
+    global _model
+    if _model is not None:
+        import gc
+
+        del _model
+        _model = None
+        gc.collect()
 
 
 def transcribe_audio_file(path: str, on_progress: Callable[[int], None] | None = None) -> dict:

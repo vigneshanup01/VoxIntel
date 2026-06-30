@@ -21,7 +21,7 @@ from app.worker.audio import convert_to_wav, get_audio_duration_seconds
 from app.worker.celery_app import celery_app
 from app.worker.diarization import diarize_audio_file
 from app.worker.summarization import summarize_transcript
-from app.worker.transcription import segments_from_whisper_result, transcribe_audio_file
+from app.worker.transcription import release_whisper_model, segments_from_whisper_result, transcribe_audio_file
 
 # Floor between progress writes: Whisper's tqdm hook can fire many times a
 # second, and every call here is its own short-lived DB connection+commit.
@@ -99,13 +99,6 @@ def transcribe_meeting(meeting_id: str) -> None:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-        # The progress reporter above writes through its own short-lived
-        # sessions (see _make_progress_reporter) -- this session's cached
-        # copy of `meeting` doesn't know about those external commits.
-        # Without refreshing, `meeting.processing_progress = None` below
-        # looks like a no-op change to SQLAlchemy (its last-known value was
-        # already None) and the column silently keeps whatever the last
-        # progress write left it as.
         db.refresh(meeting)
 
         rows = segments_from_whisper_result(result)
@@ -116,9 +109,11 @@ def transcribe_meeting(meeting_id: str) -> None:
         meeting.status = MeetingStatus.TRANSCRIBED
         meeting.processing_progress = None
         db.commit()
+
+        # Free Whisper from RAM before pyannote loads -- both together exceed
+        # typical cloud worker memory limits (Whisper ~150 MB, pyannote ~700 MB).
+        release_whisper_model()
     except Exception as exc:
-        # Worker boundary: never leave a meeting stuck at "processing" --
-        # surface the failure on the row itself so the frontend can show it.
         _fail(db, meeting_id, str(exc))
         failed = True
     finally:
@@ -127,17 +122,28 @@ def transcribe_meeting(meeting_id: str) -> None:
     if failed:
         return
 
-    # Transcription and diarization are two independent pipelines over the
-    # same audio, chained as separate tasks (not one giant function) so
-    # each can fail/retry on its own.
     try:
-        diarize_meeting.delay(meeting_id)
+        if get_settings().diarization_enabled:
+            diarize_meeting.delay(meeting_id)
+        else:
+            # Skip diarization -- chain straight to summarization so the
+            # meeting still gets a transcript and AI summary without the
+            # ~1.5 GB RAM cost of pyannote.
+            skip_db = SessionLocal()
+            try:
+                m = skip_db.get(Meeting, uuid.UUID(meeting_id))
+                if m is not None:
+                    m.status = MeetingStatus.DIARIZED
+                    skip_db.commit()
+            finally:
+                skip_db.close()
+            summarize_meeting.delay(meeting_id)
     except Exception as exc:
-        db = SessionLocal()
+        err_db = SessionLocal()
         try:
-            _fail(db, meeting_id, f"Could not queue for diarization: {exc}")
+            _fail(err_db, meeting_id, f"Could not queue next stage: {exc}")
         finally:
-            db.close()
+            err_db.close()
 
 
 @celery_app.task(name="diarize_meeting")
@@ -181,9 +187,6 @@ def diarize_meeting(meeting_id: str) -> None:
             if wav_path and os.path.exists(wav_path):
                 os.remove(wav_path)
 
-        # See the matching comment in transcribe_meeting: the progress
-        # reporter wrote through separate sessions, so this session's
-        # cached `meeting` needs a refresh before we touch it again.
         db.refresh(meeting)
 
         report_progress("Diarization: saving results")
@@ -210,10 +213,6 @@ def diarize_meeting(meeting_id: str) -> None:
         if meeting.duration_seconds is None:
             meeting.duration_seconds = duration
 
-        # Terminal "completed" now belongs to summarize_meeting, the next
-        # link in the chain -- DIARIZED is the same kind of transitional
-        # "done with this stage, queued for the next one" status that
-        # TRANSCRIBED is between transcribe_meeting and diarize_meeting.
         meeting.status = MeetingStatus.DIARIZED
         meeting.processing_progress = None
         db.commit()
@@ -229,11 +228,11 @@ def diarize_meeting(meeting_id: str) -> None:
     try:
         summarize_meeting.delay(meeting_id)
     except Exception as exc:
-        db = SessionLocal()
+        err_db = SessionLocal()
         try:
-            _fail(db, meeting_id, f"Could not queue for summarization: {exc}")
+            _fail(err_db, meeting_id, f"Could not queue for summarization: {exc}")
         finally:
-            db.close()
+            err_db.close()
 
 
 @celery_app.task(name="summarize_meeting")
@@ -268,14 +267,9 @@ def summarize_meeting(meeting_id: str) -> None:
 
         result = summarize_transcript(segment_rows, display_names, on_progress=report_progress)
 
-        # See the matching comment in transcribe_meeting/diarize_meeting:
-        # the progress reporter wrote through separate sessions, so this
-        # session's cached `meeting` needs a refresh before we touch it again.
         db.refresh(meeting)
         report_progress("Summarizing: saving results")
 
-        # Regenerating a summary (manual "Regenerate" trigger) replaces
-        # everything from the previous run rather than appending to it.
         db.query(MeetingSummary).filter(MeetingSummary.meeting_id == meeting.id).delete()
         db.query(ActionItem).filter(ActionItem.meeting_id == meeting.id).delete()
         db.query(Decision).filter(Decision.meeting_id == meeting.id).delete()

@@ -39,10 +39,11 @@ class Settings(BaseSettings):
     # Speech-to-text (worker-only; harmless for the API process to know about)
     whisper_model_size: str = "base"
 
-    # Speaker diarization (worker-only). pyannote/speaker-diarization-3.1 is
-    # gated on Hugging Face: create a free account, accept the model's terms
-    # at https://huggingface.co/pyannote/speaker-diarization-3.1, and set
-    # this to an access token from https://huggingface.co/settings/tokens.
+    # Speaker diarization (worker-only). Set DIARIZATION_ENABLED=false to skip
+    # diarization entirely and chain straight to summarization -- useful when
+    # the worker doesn't have enough RAM for pyannote (~1.5 GB needed).
+    # Transcription and AI summaries still work; speaker labels won't appear.
+    diarization_enabled: bool = True
     hf_token: str = ""
     pyannote_pipeline_name: str = "pyannote/speaker-diarization-3.1"
 
