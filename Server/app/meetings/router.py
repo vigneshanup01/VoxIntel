@@ -102,14 +102,13 @@ def delete_meeting(
     meeting_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    storage: StorageClient = Depends(get_storage_client),
 ) -> None:
     meeting = service.get_owned_meeting(db, meeting_id=meeting_id, owner_id=current_user.id)
     # Log before deleting: the FK must point at a row that still exists at
     # insert time. The meeting's own ON DELETE SET NULL then clears this
     # log entry's meeting_id (and any earlier ones) once it's gone.
     log_action(db, user_id=current_user.id, action=AuditAction.DELETE_MEETING, meeting_id=meeting_id)
-    service.delete_meeting(db, storage, meeting=meeting)
+    service.delete_meeting(db, meeting=meeting)
 
 
 @router.get("/{meeting_id}/status", response_model=MeetingStatusOut)

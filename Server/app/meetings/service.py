@@ -16,6 +16,7 @@ from app.models.meeting_summary import MeetingSummary
 from app.models.speaker_stats import SpeakerStats
 from app.models.transcript_segment import TranscriptSegment
 from app.storage.base import StorageClient
+from app.storage.s3_client import get_storage_client
 from app.storage.validation import SNIFF_BYTES, has_allowed_extension, sniff_media_signature
 from app.worker.celery_app import celery_app
 
@@ -149,8 +150,13 @@ def get_owned_meeting(db: Session, *, meeting_id: uuid.UUID, owner_id: uuid.UUID
     return meeting
 
 
-def delete_meeting(db: Session, storage: StorageClient, *, meeting: Meeting) -> None:
-    storage.delete(meeting.storage_path)
+def delete_meeting(db: Session, *, meeting: Meeting) -> None:
+    try:
+        get_storage_client().delete(meeting.storage_path)
+    except Exception:
+        # Best-effort: if storage is unreachable or the file never made it
+        # there, still remove the DB record so the user isn't stuck.
+        pass
     db.delete(meeting)
     db.commit()
 
