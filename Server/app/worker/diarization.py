@@ -72,14 +72,6 @@ def get_diarization_pipeline() -> Any:
             _pipeline = Pipeline.from_pretrained(settings.pyannote_pipeline_name, use_auth_token=settings.hf_token)
         finally:
             torch.load = _original_torch_load
-
-        # Unlike whisper.load_model(), Pipeline.from_pretrained() always
-        # loads onto CPU and never auto-detects CUDA -- has to be moved
-        # explicitly. Safe everywhere: torch.cuda.is_available() is False
-        # on any machine/container without GPU passthrough, so this is a
-        # no-op there and the pipeline simply stays on CPU as before.
-        if torch.cuda.is_available():
-            _pipeline.to(torch.device("cuda"))
     return _pipeline
 
 

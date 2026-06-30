@@ -173,26 +173,6 @@ what already exists (migration `0006`).
   Postgres (e.g. the SQLite-backed test suite) -- same behavior, different
   performance characteristics; see `app/search/service.py`.
 
-## Optional: GPU acceleration for diarization
-
-Diarization (Pyannote) is CPU-only by default and noticeably slow on a
-real meeting -- minutes, not seconds. If you have an NVIDIA GPU, driver,
-and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-installed, `docker-compose.yml`'s `worker` service already reserves the
-GPU, and `app/worker/diarization.py` moves the Pyannote pipeline onto it
-automatically (`torch.cuda.is_available()` -- a no-op everywhere else, so
-nothing breaks on a CPU-only machine running the *code*). Whisper does
-this on its own already, with no code needed.
-
-This *is* a hard requirement in `docker-compose.yml` as checked in --
-`docker compose up` will fail to start the `worker` service on a machine
-without all three. If you're running this on a machine without an NVIDIA
-GPU, delete the `worker.deploy.resources.reservations.devices` block; both
-pipelines fall back to CPU with no other changes. (Measured speedup on
-this project's dev machine, an RTX 3050 laptop GPU: a real ~11-minute
-meeting's diarization dropped from roughly 15-20 minutes to under a
-minute.)
-
 ## Running locally with Docker
 
 ```bash
@@ -205,12 +185,10 @@ worker, and the frontend. Migrations run automatically on API/worker
 startup. The worker image is significantly heavier than the API image (it
 bundles `torch`, `whisper`, and `pyannote.audio`) -- expect the first
 `--build` to take a long time (the combined dependency tree is large).
-
-> `docker-compose.yml`'s `worker` service is currently checked in with a
-> **hard NVIDIA GPU requirement** (see "Optional: GPU acceleration" above)
-> -- on a machine without one, `docker compose up` will fail to start the
-> worker. Delete the `worker.deploy.resources.reservations.devices` block
-> to run CPU-only.
+Both Whisper and Pyannote run on CPU; a real meeting's diarization takes
+minutes, not seconds -- there's no GPU acceleration wired up (deliberately
+kept out to avoid an NVIDIA-GPU/driver/nvidia-container-toolkit dependency
+in the default setup).
 
 | Service | URL |
 |---|---|

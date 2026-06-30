@@ -19,6 +19,11 @@ class S3StorageClient(StorageClient):
 
     def __init__(self) -> None:
         settings = get_settings()
+        print("ENDPOINT:", repr(settings.storage_endpoint_url))
+        print("REGION:", repr(settings.storage_region))
+        print("BUCKET:", repr(settings.storage_bucket))
+        print("SECURE:", repr(settings.storage_secure))
+        
         self._bucket = settings.storage_bucket
         self._client = boto3.client(
             "s3",
@@ -33,8 +38,10 @@ class S3StorageClient(StorageClient):
     def _ensure_bucket(self) -> None:
         try:
             self._client.head_bucket(Bucket=self._bucket)
-        except ClientError:
-            self._client.create_bucket(Bucket=self._bucket)
+        except ClientError as e:
+            raise RuntimeError(
+                f"Bucket '{self._bucket}' does not exist or is not accessible."
+            ) from e
 
     def upload(self, fileobj: BinaryIO, key: str, content_type: str | None = None) -> None:
         extra_args = {"ContentType": content_type} if content_type else {}

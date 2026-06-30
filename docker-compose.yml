@@ -27,12 +27,7 @@ services:
     volumes:
       - minio_data:/data
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+  
 
   api:
     build:
@@ -41,26 +36,26 @@ services:
     environment:
       ENVIRONMENT: development
       CORS_ORIGINS: http://localhost:5173
-      DATABASE_URL: postgresql+psycopg2://voxintel:voxintel@postgres:5432/voxintel
+  
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
       JWT_SECRET_KEY: dev-only-secret-change-me
       JWT_ALGORITHM: HS256
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 1440
       AUTH_RATE_LIMIT_MAX_ATTEMPTS: 10
       AUTH_RATE_LIMIT_WINDOW_SECONDS: 60
-      STORAGE_ENDPOINT_URL: http://minio:9000
-      STORAGE_ACCESS_KEY: voxintel
-      STORAGE_SECRET_KEY: voxintel123
-      STORAGE_BUCKET: voxintel-meetings
-      STORAGE_REGION: us-east-1
-      STORAGE_SECURE: "false"
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_REGION: ${STORAGE_REGION}
+      STORAGE_SECURE: ${STORAGE_SECURE}
       MAX_UPLOAD_SIZE_BYTES: 524288000
-      REDIS_URL: redis://redis:6379/0
+      
     depends_on:
       postgres:
         condition: service_healthy
       minio:
-        condition: service_started
-      redis:
         condition: service_started
     ports:
       - "8001:8000"
@@ -71,34 +66,20 @@ services:
     build:
       context: ./Server
       dockerfile: Dockerfile.worker
-    # Requires an NVIDIA GPU + driver + the nvidia-container-toolkit on the
-    # Docker host (already the case here). This is a hard requirement, not
-    # an optional one -- `docker compose up` will fail to start this
-    # service on a machine without all three. If you ever run this stack
-    # on a non-GPU machine, delete this `deploy:` block (transcription/
-    # diarization both fall back to CPU automatically otherwise -- see
-    # app/worker/transcription.py and app/worker/diarization.py).
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     environment:
-      DATABASE_URL: postgresql+psycopg2://voxintel:voxintel@postgres:5432/voxintel
-      STORAGE_ENDPOINT_URL: http://minio:9000
-      STORAGE_ACCESS_KEY: voxintel
-      STORAGE_SECRET_KEY: voxintel123
-      STORAGE_BUCKET: voxintel-meetings
-      STORAGE_REGION: us-east-1
-      STORAGE_SECURE: "false"
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_REGION: ${STORAGE_REGION}
+      STORAGE_SECURE: ${STORAGE_SECURE}
       WHISPER_MODEL_SIZE: base
       # pyannote/speaker-diarization-3.1 is gated on Hugging Face -- see
       # the root .env.example for how to set this. Diarization fails with
       # a clear error (not a crash) if it's left blank.
-      HF_TOKEN: ${HF_TOKEN:-}
+      HF_TOKEN: ${HF_TOKEN}
       # Phase 4 (AI summaries) -- see the root .env.example for how to set
       # this. Summarization fails with a clear error (not a crash) if it's
       # left blank.
@@ -109,8 +90,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-      redis:
-        condition: service_started
+      
     volumes:
       - ./Server:/srv
       - whisper_cache:/root/.cache/whisper
@@ -132,6 +112,5 @@ services:
 volumes:
   postgres_data:
   minio_data:
-  redis_data:
   whisper_cache:
   hf_cache:
